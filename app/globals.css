@@ -1,0 +1,42 @@
+:root {
+  --bg: #0b0b10;
+  --card: #15151d;
+  --line: #262633;
+  --text: #f2f2f7;
+  --muted: #8b8b9e;
+  --accent: #7c5cff;
+  --error: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.shell { max-width: 440px; margin: 0 auto; padding: 24px 16px; display: grid; gap: 16px; }
+.top, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 10px; }
+h1 { margin: 0; font-size: 22px; }
+.balance { font-size: 40px; font-weight: 600; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; word-break: break-all; }
+.error { color: var(--error); }
+.quote { min-height: 44px; }
+a { color: var(--accent); font-size: 13px; }
+
+button, select, input {
+  font: inherit; color: var(--text); background: #1d1d28;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+button { cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; padding: 14px; }
+button.ghost { background: transparent; }
+button.small { padding: 4px 10px; font-size: 12px; }
+input { font-size: 24px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tabs .on { background: var(--accent); border-color: var(--accent); }
