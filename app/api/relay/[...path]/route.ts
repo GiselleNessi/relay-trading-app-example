@@ -1,4 +1,4 @@
-import { missingKey, isAllowedPath, relayHeaders, RELAY_API } from "@/lib/relay-server";
+import { isAllowedPath, relayHeaders, RELAY_API } from "@/lib/relay-server";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
@@ -10,8 +10,8 @@ async function forward(request: Request, { params }: Ctx) {
     return Response.json({ message: `Endpoint not allowed: ${path}` }, { status: 404 });
   }
 
-  const headers = relayHeaders();
-  if (!headers) return missingKey();
+  // Public endpoints (prices, chains, status) also work without a key
+  const headers = relayHeaders() ?? { "Content-Type": "application/json" };
 
   const { search } = new URL(request.url);
   const res = await fetch(`${RELAY_API}/${path}${search}`, {

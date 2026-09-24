@@ -3,9 +3,8 @@
 import { PrivyProvider } from "@privy-io/react-auth";
 import { convertViemChainToRelayChain, createClient } from "@relayprotocol/relay-sdk";
 import { useState } from "react";
-import { arbitrum, base, optimism } from "viem/chains";
-
-const CHAINS = [base, arbitrum, optimism];
+import { base } from "viem/chains";
+import { CHAINS } from "@/lib/chains";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Point the Relay SDK at our own /api/relay proxy so the API key stays on
