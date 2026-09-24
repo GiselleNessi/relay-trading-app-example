@@ -47,10 +47,13 @@ export async function POST(request: Request) {
     routeRacingMinUsdSize: Number(process.env.ROUTE_RACING_MIN_USD ?? 100),
   };
 
-  // Queuing: let sells complete during temporary destination-liquidity shortages
+  // Queuing: let sells complete during temporary destination-liquidity shortages.
+  // ttl is checked on every request, so keep it at least as long as queueingTtl.
   if (!buy && flag("QUEUE_SELLS", true)) {
+    const queueingTtl = Number(process.env.QUEUEING_TTL_SECONDS ?? 3600);
     body.useQueueing = true;
-    body.queueingTtl = Number(process.env.QUEUEING_TTL_SECONDS ?? 3600);
+    body.queueingTtl = queueingTtl;
+    body.ttl = Math.max(body.ttl as number, queueingTtl);
   }
 
   // Gasless buys: pay from the USDC balance with a permit, no ETH needed
