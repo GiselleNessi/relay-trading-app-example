@@ -1,4 +1,4 @@
-import { missingKey, flag, relayHeaders, RELAY_API } from "@/lib/relay-server";
+import { flag, relayHeaders, RELAY_API } from "@/lib/relay-server";
 import { HOME, TOKENS, tokenKey } from "@/lib/tokens";
 
 type QuoteInput = {
@@ -35,7 +35,6 @@ export async function POST(request: Request) {
     destinationCurrency: destination.address,
     amount: input.amount,
     tradeType: "EXACT_INPUT", // required for Route Racing
-    referrer: process.env.RELAY_REFERRER ?? "relay-trading-app-example",
 
     // Price protection
     slippageTolerance: String(token.slippageBps),
@@ -56,8 +55,10 @@ export async function POST(request: Request) {
     body.ttl = Math.max(body.ttl as number, queueingTtl);
   }
 
-  // Gasless buys: pay from the USDC balance with a permit, no ETH needed
-  if (buy && flag("USE_PERMIT", false)) body.usePermit = true;
+  // Gasless buys: cross-chain buys from the USDC balance come back as one permit
+  // signature, and the solver submits the deposit, so no ETH is needed. Same-chain
+  // buys still return approve and swap transactions.
+  if (buy && flag("USE_PERMIT", true)) body.usePermit = true;
 
   // App fee
   if (process.env.APP_FEE_RECIPIENT && process.env.APP_FEE_BPS) {
@@ -71,8 +72,12 @@ export async function POST(request: Request) {
     body.maxSubsidizationAmount = process.env.SPONSOR_MAX_USDC;
   }
 
-  const headers = relayHeaders();
-  if (!headers) return missingKey();
+  // Relay rejects a referrer sent without an API key, so only set it with a key
+  if (process.env.RELAY_API_KEY) body.referrer = process.env.RELAY_REFERRER ?? "relay-trading-app-example";
+
+  // Quotes work without a key at public rate limits. Route Racing, Fast Quoting, Fee
+  // Sponsorship, and higher limits need a key.
+  const headers = relayHeaders() ?? { "Content-Type": "application/json" };
 
   const res = await fetch(`${RELAY_API}/quote/v2`, {
     method: "POST",

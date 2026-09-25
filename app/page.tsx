@@ -2,10 +2,10 @@
 // Token logos come from many hosts, so plain <img> is simpler than next/image here.
 /* eslint-disable @next/next/no-img-element */
 
-import { usePrivy, useSendTransaction, useWallets } from "@privy-io/react-auth";
-import { adaptViemWallet, getClient, type AdaptedWallet, type Execute } from "@relayprotocol/relay-sdk";
+import { getClient, type Execute } from "@relayprotocol/relay-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, parseUnits } from "viem";
+import { createPublicClient, erc20Abi, formatUnits, http, parseUnits } from "viem";
+import { useTradingWallet } from "./use-trading-wallet";
 import { VIEM_CHAINS } from "@/lib/chains";
 import { CATEGORY_LABEL, HOME, TOKENS, tokenKey, type Category, type Token } from "@/lib/tokens";
 
@@ -76,9 +76,7 @@ const amt = (v: bigint, decimals: number) => {
 };
 
 export default function Home() {
-  const { ready, authenticated, login, logout, user } = usePrivy();
-  const { wallets } = useWallets();
-  const { sendTransaction } = useSendTransaction();
+  const { ready, authenticated, login, logout, address, embedded, label, getRelayWallet } = useTradingWallet();
   // Gasless mode: Privy pays gas for the embedded wallet (EIP-7702 + paymaster), the way
   // consumer trading apps remove gas tokens. Set SPONSOR_GAS=true on the server once gas
   // sponsorship is enabled in the Privy Dashboard.
@@ -93,8 +91,6 @@ export default function Home() {
       })
       .catch(() => setSponsorGas(false));
   }, []);
-  const wallet = wallets.find((w) => w.walletClientType === "privy");
-  const address = wallet?.address as `0x${string}` | undefined;
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [token, setToken] = useState<Token>(TOKENS[0]);
@@ -169,11 +165,15 @@ export default function Home() {
   // Every trade starts with an onchain deposit on the origin chain, which needs gas.
   const originChain = side === "buy" ? HOME : token;
   const gasBalance = balances[`${originChain.chainId}:${NATIVE}`];
-  const noGas = !sponsorGas && gasBalance !== undefined && gasBalance === BigInt(0);
   const quoteKey = address && units && !insufficient ? `${address}|${side}|${tokenKey(token)}|${units}` : undefined;
   const quote = quoteResult?.key === quoteKey ? quoteResult?.quote : undefined;
   const quoteError = quoteResult?.key === quoteKey ? quoteResult?.error : undefined;
   const quoting = !!quoteKey && quoteResult?.key !== quoteKey;
+  // Cross-chain USDC buys come back as a single permit signature, so the solver submits
+  // the deposit and the user pays no gas. Anything with a transaction step needs gas,
+  // unless Privy sponsors it for the embedded wallet.
+  const needsGas = !!quote?.steps.some((s) => s.kind === "transaction") && !(sponsorGas && embedded);
+  const noGas = needsGas && gasBalance !== undefined && gasBalance === BigInt(0);
 
   // 1. Quote from the backend, debounced so each edit produces one quote call
   useEffect(() => {
@@ -216,27 +216,9 @@ export default function Home() {
 
   useEffect(() => () => clearInterval(pollRef.current), []);
 
-  // Relay's SDK signs and sends each step through the wallet adapter. In gasless mode,
-  // send transaction steps through Privy with sponsor: true instead, so the user never
-  // needs ETH for gas.
-  const sponsoredWallet = (walletClient: Parameters<typeof adaptViemWallet>[0]): AdaptedWallet => {
-    const adapted = adaptViemWallet(walletClient);
-    return {
-      ...adapted,
-      supportsAtomicBatch: async () => false,
-      handleSendTransactionStep: async (chainId, item) => {
-        const { hash } = await sendTransaction(
-          { to: item.data.to, data: item.data.data, value: item.data.value ?? "0x0", chainId },
-          { sponsor: true, address },
-        );
-        return hash;
-      },
-    };
-  };
-
-  // 2. Sign and submit with the embedded wallet (no wallet prompt)
+  // 2. Sign and submit. The embedded wallet signs with no prompt; a connected wallet prompts.
   const trade = async () => {
-    if (!wallet || !quote) return;
+    if (!address || !quote) return;
     setTrading(true);
     setStatus("waiting");
     setStatusDetail(undefined);
@@ -250,17 +232,12 @@ export default function Home() {
 
     try {
       const originChainId = side === "buy" ? HOME.chainId : token.chainId;
-      await wallet.switchChain(originChainId);
-      const walletClient = createWalletClient({
-        account: address!,
-        chain: VIEM_CHAINS[originChainId],
-        transport: custom(await wallet.getEthereumProvider()),
-      });
+      const wallet = await getRelayWallet(originChainId, sponsorGas);
 
       let fastFillSent = false;
       await getClient().actions.execute({
         quote,
-        wallet: sponsorGas ? sponsoredWallet(walletClient) : walletClient,
+        wallet,
         onProgress: ({ txHashes }) => {
           // Fast fill only slow deposits: once the deposit is submitted, wait for the
           // threshold, then ask the backend, which skips it if Relay already indexed it
@@ -337,10 +314,10 @@ export default function Home() {
         <section className="card hero">
           <h1>One balance. Every chain.</h1>
           <p className="muted">
-            Sign up with your email. We create a wallet for you, and every trade settles in and out of your USDC
-            balance, with no wallet pop-ups.
+            Sign up with your email and we create a wallet for you, with no wallet pop-ups, or connect your own
+            wallet. Every trade settles in and out of your USDC balance.
           </p>
-          <button className="primary" onClick={login}>Sign up with email</button>
+          <button className="primary" onClick={login}>Sign up or connect a wallet</button>
         </section>
       ) : (
         <>
@@ -353,7 +330,7 @@ export default function Home() {
               {homeBalance === undefined ? "…" : usd(Number(formatUnits(homeBalance, HOME.decimals)))}
             </div>
             {pendingUsd !== undefined && <div className="pending">+{usd(pendingUsd)} pending</div>}
-            <div className="muted small">{user?.email?.address} · USDC on Base · {address}</div>
+            <div className="muted small">{label} · USDC on Base · {address}</div>
           </section>
 
           <section className="card">
@@ -433,7 +410,7 @@ export default function Home() {
               {insufficient && <span className="error">Not enough balance</span>}
               {noGas && (
                 <span className="error">
-                  You need a little ETH on {originChain.chainName} to pay gas for this trade.
+                  This trade needs a little ETH on {originChain.chainName} for gas. Cross-chain buys don&apos;t.
                 </span>
               )}
               {quoting && <span className="muted">Getting the best price…</span>}

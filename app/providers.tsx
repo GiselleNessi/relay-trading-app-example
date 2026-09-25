@@ -22,7 +22,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
       config={{
-        loginMethods: ["email"],
+        // Email creates an embedded wallet; "wallet" lets users connect their own
+        loginMethods: ["email", "wallet"],
         defaultChain: base,
         supportedChains: CHAINS,
         embeddedWallets: {
