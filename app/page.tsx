@@ -83,10 +83,14 @@ export default function Home() {
   // consumer trading apps remove gas tokens. Set SPONSOR_GAS=true on the server once gas
   // sponsorship is enabled in the Privy Dashboard.
   const [sponsorGas, setSponsorGas] = useState(false);
+  const [fastFillAfterSeconds, setFastFillAfterSeconds] = useState(10);
   useEffect(() => {
     fetch("/api/config")
       .then((res) => res.json())
-      .then((config) => setSponsorGas(!!config.sponsorGas))
+      .then((config) => {
+        setSponsorGas(!!config.sponsorGas);
+        if (config.fastFillAfterSeconds) setFastFillAfterSeconds(config.fastFillAfterSeconds);
+      })
       .catch(() => setSponsorGas(false));
   }, []);
   const wallet = wallets.find((w) => w.walletClientType === "privy");
@@ -258,14 +262,17 @@ export default function Home() {
         quote,
         wallet: sponsorGas ? sponsoredWallet(walletClient) : walletClient,
         onProgress: ({ txHashes }) => {
-          // Optional: fast fill once the deposit is submitted (server decides if it's enabled)
+          // Fast fill only slow deposits: once the deposit is submitted, wait for the
+          // threshold, then ask the backend, which skips it if Relay already indexed it
           if (!fastFillSent && id && txHashes?.length) {
             fastFillSent = true;
-            fetch("/api/fast-fill", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ requestId: id }),
-            });
+            setTimeout(() => {
+              fetch("/api/fast-fill", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ requestId: id }),
+              });
+            }, fastFillAfterSeconds * 1000);
           }
         },
       });

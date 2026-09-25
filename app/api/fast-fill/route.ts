@@ -1,6 +1,8 @@
 import { missingKey, flag, relayHeaders, RELAY_API } from "@/lib/relay-server";
 
-// Optional: fast fill right after the deposit is submitted. Draws on your app
+// Fast fill a slow deposit. The client calls this once a deposit has gone
+// unindexed for longer than FAST_FILL_AFTER_SECONDS; the backend re-checks the
+// status and only fills a deposit Relay still hasn't indexed. Draws on your app
 // balance, so it's off unless FAST_FILL=true.
 export async function POST(request: Request) {
   if (!flag("FAST_FILL", false)) {
@@ -14,6 +16,13 @@ export async function POST(request: Request) {
 
   const headers = relayHeaders();
   if (!headers) return missingKey();
+
+  // Skip deposits Relay has already indexed: they don't need insurance
+  const statusRes = await fetch(`${RELAY_API}/intents/status/v3?requestId=${requestId}`, { headers });
+  const { status } = statusRes.ok ? ((await statusRes.json()) as { status?: string }) : { status: undefined };
+  if (status && !["waiting", "depositing"].includes(status)) {
+    return Response.json({ skipped: true, reason: `Deposit already indexed (${status})` });
+  }
 
   const res = await fetch(`${RELAY_API}/fast-fill`, {
     method: "POST",

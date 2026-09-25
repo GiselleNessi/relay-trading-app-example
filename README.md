@@ -17,7 +17,7 @@ Users sign up with an email, get an embedded wallet, and trade in and out of one
 | Use an embedded wallet | `app/providers.tsx` configures Privy email login with an embedded wallet and no per-transaction confirmation modal. |
 | Sign and submit the deposit | `app/page.tsx` executes the quote with the Relay SDK and the embedded wallet. |
 | Track the request | `app/page.tsx` polls `/intents/status/v3` once per second and maps each status to the UI response from the guide. Production apps should use websockets or webhooks. |
-| Call Fast Fill | `app/api/fast-fill/route.ts`, called once per request right after the deposit is submitted. Off by default. |
+| Call Fast Fill for slow deposits | `app/api/fast-fill/route.ts`. The client asks once a deposit has gone unindexed for `FAST_FILL_AFTER_SECONDS`, and the backend re-checks the status and only fills deposits Relay still hasn't indexed. Off by default. |
 
 ## Trading UX
 
