@@ -11,9 +11,7 @@ import { CATEGORY_LABEL, HOME, TOKENS, tokenKey, type Category, type Token } fro
 
 const NATIVE = "0x0000000000000000000000000000000000000000";
 
-// Gasless mode: Privy pays gas for the embedded wallet (EIP-7702 + paymaster), the way
-// consumer trading apps remove gas tokens. Requires gas sponsorship in the Privy Dashboard.
-const SPONSOR_GAS = process.env.NEXT_PUBLIC_SPONSOR_GAS === "true";
+
 
 // What each status means for your UI. Mirrors the table in the Unified Balance guide.
 const STATUS_RESPONSE: Record<string, { label: string; response: string; terminal?: boolean }> = {
@@ -81,6 +79,16 @@ export default function Home() {
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
   const { sendTransaction } = useSendTransaction();
+  // Gasless mode: Privy pays gas for the embedded wallet (EIP-7702 + paymaster), the way
+  // consumer trading apps remove gas tokens. Set SPONSOR_GAS=true on the server once gas
+  // sponsorship is enabled in the Privy Dashboard.
+  const [sponsorGas, setSponsorGas] = useState(false);
+  useEffect(() => {
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((config) => setSponsorGas(!!config.sponsorGas))
+      .catch(() => setSponsorGas(false));
+  }, []);
   const wallet = wallets.find((w) => w.walletClientType === "privy");
   const address = wallet?.address as `0x${string}` | undefined;
 
@@ -157,7 +165,7 @@ export default function Home() {
   // Every trade starts with an onchain deposit on the origin chain, which needs gas.
   const originChain = side === "buy" ? HOME : token;
   const gasBalance = balances[`${originChain.chainId}:${NATIVE}`];
-  const noGas = !SPONSOR_GAS && gasBalance !== undefined && gasBalance === BigInt(0);
+  const noGas = !sponsorGas && gasBalance !== undefined && gasBalance === BigInt(0);
   const quoteKey = address && units && !insufficient ? `${address}|${side}|${tokenKey(token)}|${units}` : undefined;
   const quote = quoteResult?.key === quoteKey ? quoteResult?.quote : undefined;
   const quoteError = quoteResult?.key === quoteKey ? quoteResult?.error : undefined;
@@ -248,7 +256,7 @@ export default function Home() {
       let fastFillSent = false;
       await getClient().actions.execute({
         quote,
-        wallet: SPONSOR_GAS ? sponsoredWallet(walletClient) : walletClient,
+        wallet: sponsorGas ? sponsoredWallet(walletClient) : walletClient,
         onProgress: ({ txHashes }) => {
           // Optional: fast fill once the deposit is submitted (server decides if it's enabled)
           if (!fastFillSent && id && txHashes?.length) {

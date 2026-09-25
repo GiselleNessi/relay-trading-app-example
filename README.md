@@ -41,7 +41,7 @@ Modeled on consumer trading apps like the ones this guide describes:
 
 5. Open http://localhost:3000, log in with your email, and send a few dollars of USDC on Base to the wallet address shown.
 
-By default the embedded wallet pays gas, so it needs a little ETH on each chain it trades from. To make trades gasless, the way consumer trading apps do, turn on TEE execution and gas sponsorship (Fee sponsorship > Sponsor gas fees, with Base selected) in the Privy Dashboard, then set `NEXT_PUBLIC_SPONSOR_GAS=true`. The app then sends each transaction through Privy with `sponsor: true`.
+By default the embedded wallet pays gas, so it needs a little ETH on each chain it trades from. To make trades gasless, the way consumer trading apps do, turn on TEE execution and gas sponsorship (Fee sponsorship > Sponsor gas fees, with Base selected) in the Privy Dashboard, then set `SPONSOR_GAS=true` on the server. The app then sends each transaction through Privy with `sponsor: true`.
 
 ## Settings
 
