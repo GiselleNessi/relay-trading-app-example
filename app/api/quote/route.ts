@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   // Fee Sponsorship, capped per request
   if (process.env.SPONSOR_MAX_USDC) {
     body.subsidizeFees = true;
-    body.sponsoredFeeComponents = ["execution", "swap"];
+    body.sponsoredFeeComponents = ["execution", "swap", "relay"];
     body.maxSubsidizationAmount = process.env.SPONSOR_MAX_USDC;
   }
 
