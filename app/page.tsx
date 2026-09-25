@@ -2,14 +2,18 @@
 // Token logos come from many hosts, so plain <img> is simpler than next/image here.
 /* eslint-disable @next/next/no-img-element */
 
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { getClient, type Execute } from "@relayprotocol/relay-sdk";
+import { usePrivy, useSendTransaction, useWallets } from "@privy-io/react-auth";
+import { adaptViemWallet, getClient, type AdaptedWallet, type Execute } from "@relayprotocol/relay-sdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, parseUnits } from "viem";
 import { VIEM_CHAINS } from "@/lib/chains";
 import { CATEGORY_LABEL, HOME, TOKENS, tokenKey, type Category, type Token } from "@/lib/tokens";
 
 const NATIVE = "0x0000000000000000000000000000000000000000";
+
+// Gasless mode: Privy pays gas for the embedded wallet (EIP-7702 + paymaster), the way
+// consumer trading apps remove gas tokens. Requires gas sponsorship in the Privy Dashboard.
+const SPONSOR_GAS = process.env.NEXT_PUBLIC_SPONSOR_GAS === "true";
 
 // What each status means for your UI. Mirrors the table in the Unified Balance guide.
 const STATUS_RESPONSE: Record<string, { label: string; response: string; terminal?: boolean }> = {
@@ -76,6 +80,7 @@ const amt = (v: bigint, decimals: number) => {
 export default function Home() {
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
+  const { sendTransaction } = useSendTransaction();
   const wallet = wallets.find((w) => w.walletClientType === "privy");
   const address = wallet?.address as `0x${string}` | undefined;
 
@@ -152,7 +157,7 @@ export default function Home() {
   // Every trade starts with an onchain deposit on the origin chain, which needs gas.
   const originChain = side === "buy" ? HOME : token;
   const gasBalance = balances[`${originChain.chainId}:${NATIVE}`];
-  const noGas = gasBalance !== undefined && gasBalance === BigInt(0);
+  const noGas = !SPONSOR_GAS && gasBalance !== undefined && gasBalance === BigInt(0);
   const quoteKey = address && units && !insufficient ? `${address}|${side}|${tokenKey(token)}|${units}` : undefined;
   const quote = quoteResult?.key === quoteKey ? quoteResult?.quote : undefined;
   const quoteError = quoteResult?.key === quoteKey ? quoteResult?.error : undefined;
@@ -199,6 +204,24 @@ export default function Home() {
 
   useEffect(() => () => clearInterval(pollRef.current), []);
 
+  // Relay's SDK signs and sends each step through the wallet adapter. In gasless mode,
+  // send transaction steps through Privy with sponsor: true instead, so the user never
+  // needs ETH for gas.
+  const sponsoredWallet = (walletClient: Parameters<typeof adaptViemWallet>[0]): AdaptedWallet => {
+    const adapted = adaptViemWallet(walletClient);
+    return {
+      ...adapted,
+      supportsAtomicBatch: async () => false,
+      handleSendTransactionStep: async (chainId, item) => {
+        const { hash } = await sendTransaction(
+          { to: item.data.to, data: item.data.data, value: item.data.value ?? "0x0", chainId },
+          { sponsor: true, address },
+        );
+        return hash;
+      },
+    };
+  };
+
   // 2. Sign and submit with the embedded wallet (no wallet prompt)
   const trade = async () => {
     if (!wallet || !quote) return;
@@ -225,7 +248,7 @@ export default function Home() {
       let fastFillSent = false;
       await getClient().actions.execute({
         quote,
-        wallet: walletClient,
+        wallet: SPONSOR_GAS ? sponsoredWallet(walletClient) : walletClient,
         onProgress: ({ txHashes }) => {
           // Optional: fast fill once the deposit is submitted (server decides if it's enabled)
           if (!fastFillSent && id && txHashes?.length) {
