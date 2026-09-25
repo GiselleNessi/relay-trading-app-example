@@ -148,6 +148,11 @@ export default function Home() {
     units = undefined;
   }
   const insufficient = units !== undefined && inputBalance !== undefined && units > inputBalance;
+
+  // Every trade starts with an onchain deposit on the origin chain, which needs gas.
+  const originChain = side === "buy" ? HOME : token;
+  const gasBalance = balances[`${originChain.chainId}:${NATIVE}`];
+  const noGas = gasBalance !== undefined && gasBalance === BigInt(0);
   const quoteKey = address && units && !insufficient ? `${address}|${side}|${tokenKey(token)}|${units}` : undefined;
   const quote = quoteResult?.key === quoteKey ? quoteResult?.quote : undefined;
   const quoteError = quoteResult?.key === quoteKey ? quoteResult?.error : undefined;
@@ -235,7 +240,12 @@ export default function Home() {
       });
     } catch (e) {
       setStatus((s) => (s && STATUS_RESPONSE[s]?.terminal ? s : "failure"));
-      setStatusDetail(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setStatusDetail(
+        /insufficient funds|exceeds balance|gas required/i.test(message)
+          ? `Not enough ETH on ${originChain.chainName} to pay gas. Add a little ETH and try again.`
+          : message,
+      );
       setPendingUsd(undefined);
     } finally {
       setTrading(false);
@@ -308,9 +318,11 @@ export default function Home() {
             <div className="muted small">{user?.email?.address} · USDC on Base · {address}</div>
           </section>
 
-          {holdings.length > 0 && (
-            <section className="card">
+          <section className="card">
               <span className="muted small">Holdings</span>
+              {holdings.length === 0 && (
+                <span className="muted small">No tokens yet. Anything you buy shows up here, with its balance and value.</span>
+              )}
               {holdings.map(({ t, bal, value }) => (
                 <button
                   key={tokenKey(t)}
@@ -330,8 +342,7 @@ export default function Home() {
                   <span>{usd(value)}</span>
                 </button>
               ))}
-            </section>
-          )}
+          </section>
 
           <section className="card">
             <div className="tabs">
@@ -382,6 +393,11 @@ export default function Home() {
 
             <div className="quote">
               {insufficient && <span className="error">Not enough balance</span>}
+              {noGas && (
+                <span className="error">
+                  You need a little ETH on {originChain.chainName} to pay gas for this trade.
+                </span>
+              )}
               {quoting && <span className="muted">Getting the best price…</span>}
               {quoteError && <span className="error">{quoteError}</span>}
               {out && !quoting && (
@@ -410,9 +426,10 @@ export default function Home() {
               )}
             </div>
 
-            <button className="primary" disabled={!quote || trading} onClick={trade}>
+            <button className="primary" disabled={!quote || trading || noGas} onClick={trade}>
               {trading ? "Trading…" : `${side === "buy" ? "Buy" : "Sell"} ${token.symbol}`}
             </button>
+            {status === "failure" && statusDetail && <p className="error small">{statusDetail}</p>}
           </section>
 
           {status && (
