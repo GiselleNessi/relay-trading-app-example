@@ -227,7 +227,11 @@ export default function Home() {
         if (STATUS_RESPONSE[data.status]?.terminal) {
           clearInterval(pollRef.current);
           setPendingUsd(undefined);
+          // The RPC can lag the fill by a few seconds, so refresh again after
+          // a beat or the balance shows its pre-trade value.
           refreshBalances();
+          setTimeout(refreshBalances, 3000);
+          setTimeout(refreshBalances, 8000);
         }
       }, 1000);
     },
