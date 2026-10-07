@@ -2,6 +2,8 @@
 
 An example trading app built on Relay, and the companion to the [Unified Balance guide](https://docs.relay.link/references/api/use_case_guides/unified-balance). Your users hold one USDC balance on Base and buy or sell tokens on Base, Arbitrum, Optimism, and Ethereum in one tap.
 
+Try it live: [relay-trading-app-example.vercel.app](https://relay-trading-app-example.vercel.app) — sign up with an email, send a few dollars of USDC on Base, and buy a token on Arbitrum with one gasless signature.
+
 This is a simplified take on a consumer trading app, not a production app. Clone it, run it locally with your own keys, and use it as a starting point. It shows the Relay pieces the guide recommends:
 
 - **Server-side quotes** with per-token slippage, a short `ttl`, and optional app fees (`app/api/quote/route.ts`)
@@ -75,3 +77,18 @@ Every setting is in `.env.example` with its default. Route Racing, Fast Quoting,
 ## Before you ship something similar
 
 This is an example. Before you ship, add authentication and rate limits to the API routes, replace status polling with [websockets](https://docs.relay.link/references/api/api_guides/websockets) or [webhooks](https://docs.relay.link/references/api/api_guides/webhooks), and read the [Unified Balance guide](https://docs.relay.link/references/api/use_case_guides/unified-balance) end to end.
+
+## Pitfalls this app handles for you
+
+Found by trading real money through it, fixed in the code so your integration can copy the handling:
+
+- **Lead users to the gasless path.** The app opens on a cross-chain token, where buys are one permit signature, instead of a same-chain trade that needs gas (`app/page.tsx`, default token).
+- **Translate quote errors.** Relay's error enums (`INSUFFICIENT_LIQUIDITY` and friends) are developer-facing; map them before they reach a trader (`QUOTE_ERRORS` in `app/page.tsx`).
+- **Max-selling a native token must reserve gas.** The deposit transaction pays its own gas from the balance being sold, so selling every wei always fails (`MAX_SELL_GAS_RESERVE`).
+- **Don't trust provider chain switching.** Privy's embedded provider can stay on the old chain after `switchChain`, so embedded transactions go through Privy's `sendTransaction` with an explicit chain (`app/use-trading-wallet.ts`).
+- **Stop tracking abandoned requests.** A quote whose deposit never left the wallet stays at `waiting` forever; polling it overwrites your failure UI (`trade()` in `app/page.tsx`).
+- **Refresh balances twice.** RPCs lag the fill by a few seconds, so a single refresh at `success` often re-reads the pre-trade balance.
+
+## License
+
+[MIT](LICENSE)
