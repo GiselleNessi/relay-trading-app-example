@@ -95,7 +95,9 @@ export default function Home() {
   }, []);
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [token, setToken] = useState<Token>(TOKENS[0]);
+  // Default to a cross-chain token so the first quote a visitor sees is the
+  // gasless one. Same-chain trades (gas required) are a selection away.
+  const [token, setToken] = useState<Token>(TOKENS.find((t) => t.chainId !== HOME.chainId) ?? TOKENS[0]);
   const [picking, setPicking] = useState(false);
   const [search, setSearch] = useState("");
   const [amount, setAmount] = useState("");
