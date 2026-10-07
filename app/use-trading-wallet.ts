@@ -26,11 +26,20 @@ export function useTradingWallet() {
   // sponsor: true, so the user needs no ETH. Connected wallets pay their own gas.
   const getRelayWallet = async (chainId: number, sponsorGas: boolean): Promise<AdaptedWallet> => {
     if (!wallet || !address) throw new Error("No wallet connected");
+    // switchChain can resolve while the provider still reports the old chain,
+    // and the Relay SDK refuses a wallet on the wrong chain. Wait until the
+    // provider actually switched before handing it over.
     await wallet.switchChain(chainId);
+    const provider = await wallet.getEthereumProvider();
+    for (let i = 0; i < 10; i++) {
+      const current = parseInt((await provider.request({ method: "eth_chainId" })) as string, 16);
+      if (current === chainId) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
     const walletClient = createWalletClient({
       account: address,
       chain: VIEM_CHAINS[chainId],
-      transport: custom(await wallet.getEthereumProvider()),
+      transport: custom(provider),
     });
     const adapted = adaptViemWallet(walletClient);
     if (!sponsorGas || !embedded) return adapted;
