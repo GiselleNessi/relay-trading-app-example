@@ -42,15 +42,23 @@ export function useTradingWallet() {
       transport: custom(provider),
     });
     const adapted = adaptViemWallet(walletClient);
-    if (!sponsorGas || !embedded) return adapted;
+    // Connected wallets (MetaMask and friends) prompt the user and switch
+    // chains properly on their own.
+    if (!embedded) return adapted;
 
+    // The embedded provider doesn't reliably land on the requested chain even
+    // after switchChain, which fails trades with a chain mismatch. Privy's
+    // sendTransaction takes the chain per transaction and routes it correctly
+    // regardless of provider state, so embedded transactions always go through
+    // it. Signatures already carry their chain in the EIP-712 domain.
     return {
       ...adapted,
+      getChainId: async () => chainId,
       supportsAtomicBatch: async () => false,
       handleSendTransactionStep: async (stepChainId, item) => {
         const { hash } = await sendTransaction(
           { to: item.data.to, data: item.data.data, value: item.data.value ?? "0x0", chainId: stepChainId },
-          { sponsor: true, address },
+          { sponsor: sponsorGas, address },
         );
         return hash;
       },
