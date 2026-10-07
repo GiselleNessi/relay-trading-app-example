@@ -13,15 +13,17 @@ const NATIVE = "0x0000000000000000000000000000000000000000";
 
 
 
-// What each status means for your UI. Mirrors the table in the Unified Balance guide.
+// One entry per status from the Unified Balance guide's tracking table. The guide's
+// "response" column describes what your app should DO at each status; the message here
+// is what this app then shows the user.
 const STATUS_RESPONSE: Record<string, { label: string; response: string; terminal?: boolean }> = {
-  waiting: { label: "Waiting for deposit", response: "Show the trade as pending." },
-  depositing: { label: "Depositing", response: "Keep showing the trade as pending." },
-  pending: { label: "Filling", response: "Keep showing the trade as pending." },
-  submitted: { label: "Almost done", response: "Show the trade as nearly complete." },
-  success: { label: "Done", response: "Update the balance and stop tracking.", terminal: true },
-  failure: { label: "Failed", response: "Show the failure reason and check for a refund.", terminal: true },
-  refund: { label: "Refunded", response: "Show the trade as refunded, not failed.", terminal: true },
+  waiting: { label: "Waiting for deposit", response: "Waiting for your deposit to be picked up." },
+  depositing: { label: "Depositing", response: "Your deposit is confirmed and on its way." },
+  pending: { label: "Filling", response: "Filling your trade…" },
+  submitted: { label: "Almost done", response: "Wrapping up." },
+  success: { label: "Done", response: "Your balance is updated.", terminal: true },
+  failure: { label: "Failed", response: "The trade didn't complete. Deposited funds are refunded.", terminal: true },
+  refund: { label: "Refunded", response: "This trade was refunded to your balance. Nothing was lost.", terminal: true },
 };
 
 const BUY_PRESETS_USD = [5, 10, 25];
@@ -410,13 +412,15 @@ export default function Home() {
               {insufficient && <span className="error">Not enough balance</span>}
               {noGas && (
                 <span className="error">
-                  This trade needs a little ETH on {originChain.chainName} for gas. Cross-chain buys don&apos;t.
+                  Same-chain trades need a little ETH on {originChain.chainName} for gas.
+                  {side === "buy" && " Tip: buying a token on another chain is gasless."}
                 </span>
               )}
               {quoting && <span className="muted">Getting the best price…</span>}
               {quoteError && <span className="error">{quoteError}</span>}
               {out && !quoting && (
                 <>
+                  {!needsGas && <span className="good">Gasless ⚡ one signature, no ETH needed.</span>}
                   <div className="receive">
                     You get ≈ <strong>{amt(BigInt(out.amount ?? "0"), outputDecimals)} {side === "buy" ? token.symbol : "USDC"}</strong>
                     <span className="muted"> ({usd(Number(out.amountUsd ?? 0))})</span>
@@ -457,7 +461,7 @@ export default function Home() {
                   </a>
                 )}
               </div>
-              <p className="muted small">Your response: {current?.response ?? "Keep tracking."}</p>
+              <p className="muted small">{current?.response ?? "Still working on it…"}</p>
               {statusDetail && <p className="error small">{statusDetail}</p>}
             </section>
           )}
