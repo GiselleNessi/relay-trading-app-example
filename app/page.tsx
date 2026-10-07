@@ -29,6 +29,21 @@ const STATUS_RESPONSE: Record<string, { label: string; response: string; termina
 const BUY_PRESETS_USD = [5, 10, 25];
 const PERCENTS = [10, 25, 50, 100];
 
+// Relay's quote errors are developer-facing enums. Translate the common ones
+// for the user; anything unmapped falls back to the API's message.
+const QUOTE_ERRORS: Record<string, string> = {
+  INSUFFICIENT_LIQUIDITY: "Not enough liquidity for this trade right now. Try a smaller amount, or try again in a moment.",
+  AMOUNT_TOO_LOW: "This amount is too small to trade. Try a larger one.",
+  UNSUPPORTED_ROUTE: "This pair isn't tradable right now.",
+  UNSUPPORTED_CURRENCY: "This token isn't supported.",
+};
+
+// Selling Max of a native token: the deposit transaction pays its own gas from
+// the same balance, so selling every wei always fails as insufficient funds.
+// Reserve a little; mainnet gas costs far more than the L2s.
+const MAX_SELL_GAS_RESERVE: Record<number, bigint> = { 1: BigInt(10) ** BigInt(15) }; // 0.001 ETH
+const DEFAULT_GAS_RESERVE = BigInt(5) * BigInt(10) ** BigInt(13); // 0.00005 ETH
+
 type Balances = Record<string, bigint>;
 
 // Reads USDC plus every listed token, one multicall per chain.
@@ -187,7 +202,8 @@ export default function Home() {
       const res = await fetch("/api/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body });
       const data = await res.json();
       if (!res.ok) {
-        setQuoteResult({ key: quoteKey, error: data.errorCode ? `${data.errorCode}: ${data.message}` : data.message });
+        const friendly = data.errorCode ? QUOTE_ERRORS[data.errorCode] : undefined;
+        setQuoteResult({ key: quoteKey, error: friendly ?? data.message ?? "Couldn't get a price. Try again." });
       } else {
         setQuoteResult({ key: quoteKey, quote: data });
       }
@@ -234,19 +250,19 @@ export default function Home() {
     setRequestId(id);
     if (id) track(id);
 
+    let depositSent = false;
     try {
       const originChainId = side === "buy" ? HOME.chainId : token.chainId;
       const wallet = await getRelayWallet(originChainId, sponsorGas);
 
-      let fastFillSent = false;
       await getClient().actions.execute({
         quote,
         wallet,
         onProgress: ({ txHashes }) => {
           // Fast fill only slow deposits: once the deposit is submitted, wait for the
           // threshold, then ask the backend, which skips it if Relay already indexed it
-          if (!fastFillSent && id && txHashes?.length) {
-            fastFillSent = true;
+          if (!depositSent && id && txHashes?.length) {
+            depositSent = true;
             setTimeout(() => {
               fetch("/api/fast-fill", {
                 method: "POST",
@@ -258,6 +274,9 @@ export default function Home() {
         },
       });
     } catch (e) {
+      // If the deposit never left the wallet, the request will sit at "waiting"
+      // forever. Stop polling it, or the poll overwrites this failure state.
+      if (!depositSent) clearInterval(pollRef.current);
       setStatus((s) => (s && STATUS_RESPONSE[s]?.terminal ? s : "failure"));
       const message = e instanceof Error ? e.message : String(e);
       setStatusDetail(
@@ -274,7 +293,11 @@ export default function Home() {
 
   const setPercent = (pct: number) => {
     if (inputBalance === undefined) return;
-    const v = (inputBalance * BigInt(pct)) / BigInt(100);
+    let v = (inputBalance * BigInt(pct)) / BigInt(100);
+    if (pct === 100 && side === "sell" && token.address === NATIVE) {
+      const reserve = MAX_SELL_GAS_RESERVE[token.chainId] ?? DEFAULT_GAS_RESERVE;
+      v = v > reserve ? v - reserve : BigInt(0);
+    }
     setAmount(formatUnits(v, inputDecimals));
   };
 
