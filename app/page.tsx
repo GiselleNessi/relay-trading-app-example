@@ -86,10 +86,13 @@ async function fetchPrice(t: Pick<Token, "chainId" | "address">): Promise<number
 }
 
 const usd = (n?: number) =>
-  n === undefined ? "…" : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n < 1 ? 4 : 2 });
+  n === undefined ? "…" : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+// Token amounts: a few significant digits, never scientific notation.
 const amt = (v: bigint, decimals: number) => {
   const n = Number(formatUnits(v, decimals));
-  return n === 0 ? "0" : n < 0.0001 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+  if (n === 0) return "0";
+  if (n < 1) return n.toLocaleString("en-US", { maximumSignificantDigits: 3, maximumFractionDigits: 18 });
+  return n.toLocaleString("en-US", { maximumFractionDigits: 5 });
 };
 
 export default function Home() {
@@ -382,7 +385,8 @@ export default function Home() {
               {homeBalance === undefined ? "…" : usd(Number(formatUnits(homeBalance, HOME.decimals)))}
             </div>
             {pendingUsd !== undefined && <div className="pending">+{usd(pendingUsd)} pending</div>}
-            <div className="muted small">{label} · USDC on Base · {address}</div>
+            <div className="muted small">{label} · USDC on Base</div>
+            <div className="muted small mono">{address}</div>
           </section>
 
           <section className="card">

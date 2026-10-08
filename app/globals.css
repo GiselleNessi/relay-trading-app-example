@@ -23,8 +23,8 @@ body {
 /* Balance and holdings sit beside the trade widget on wide screens, above it on phones */
 .layout, .side, .main { display: grid; gap: 14px; align-content: start; }
 @media (min-width: 900px) {
-  .shell { max-width: 920px; }
-  .layout { grid-template-columns: 1fr 1fr; align-items: start; }
+  .shell { max-width: 880px; }
+  .layout { grid-template-columns: 5fr 6fr; align-items: start; }
 }
 .top, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .brand { letter-spacing: -0.01em; }
@@ -68,7 +68,9 @@ button.link { background: none; border: none; padding: 0; color: var(--muted); t
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { padding: 6px 12px; font-size: 13px; border-radius: 999px; }
 
-.quote { min-height: 48px; display: grid; gap: 6px; }
+.quote { display: grid; gap: 6px; }
+.quote:empty { display: none; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 .fees { width: 100%; font-size: 13px; border-collapse: collapse; }
 .fees td { padding: 3px 0; color: var(--muted); }
 .fees td:last-child { text-align: right; color: var(--text); }
