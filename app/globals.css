@@ -19,6 +19,13 @@ body {
 }
 
 .shell { max-width: 440px; margin: 0 auto; padding: 24px 16px 40px; display: grid; gap: 14px; }
+
+/* Balance and holdings sit beside the trade widget on wide screens, above it on phones */
+.layout, .side, .main { display: grid; gap: 14px; align-content: start; }
+@media (min-width: 900px) {
+  .shell { max-width: 920px; }
+  .layout { grid-template-columns: 1fr 1fr; align-items: start; }
+}
 .top, .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .brand { letter-spacing: -0.01em; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 10px; }
@@ -71,3 +78,8 @@ button.link { background: none; border: none; padding: 0; color: var(--muted); t
 .group { margin: 10px 4px 2px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+.log { padding: 10px 14px; gap: 6px; }
+.log-head { background: none; border: none; padding: 4px 0; width: 100%; text-align: left; }
+.log-entries { display: grid; gap: 6px; padding-bottom: 4px; }
+.log-entry { display: grid; grid-template-columns: 70px 1fr; gap: 8px; }

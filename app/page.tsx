@@ -130,6 +130,27 @@ export default function Home() {
   const [pendingUsd, setPendingUsd] = useState<number>();
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
+  // Event log of status transitions, collapsed to its latest line by default.
+  const [log, setLog] = useState<{ time: string; label: string; detail?: string; error?: boolean }[]>([]);
+  const [logOpen, setLogOpen] = useState(false);
+  const lastLogged = useRef("");
+  useEffect(() => {
+    if (!status) return;
+    const key = `${requestId}|${status}|${statusDetail ?? ""}`;
+    if (lastLogged.current === key) return;
+    lastLogged.current = key;
+    const entry = STATUS_RESPONSE[status];
+    setLog((l) => [
+      ...l,
+      {
+        time: new Date().toLocaleTimeString(),
+        label: entry?.label ?? status,
+        detail: statusDetail ?? entry?.response,
+        error: !!statusDetail,
+      },
+    ]);
+  }, [status, statusDetail, requestId]);
+
   const inputDecimals = side === "buy" ? HOME.decimals : token.decimals;
   const outputDecimals = side === "buy" ? token.decimals : HOME.decimals;
   const homeBalance = balances[tokenKey(HOME)];
@@ -327,7 +348,6 @@ export default function Home() {
   const sponsorship = (quote as { feeSponsorship?: { quoted?: { sponsoredTotal?: { amountUsd?: string } } } } | undefined)
     ?.feeSponsorship;
   const sponsoredUsd = Number(sponsorship?.quoted?.sponsoredTotal?.amountUsd ?? 0);
-  const current = status ? STATUS_RESPONSE[status] : undefined;
   const livePrice = prices[tokenKey(token)];
 
   return (
@@ -351,7 +371,8 @@ export default function Home() {
           <button className="primary" onClick={login}>Sign up or connect a wallet</button>
         </section>
       ) : (
-        <>
+        <div className="layout">
+          <div className="side">
           <section className="card">
             <div className="row">
               <span className="muted small">Cash balance</span>
@@ -389,7 +410,9 @@ export default function Home() {
                 </button>
               ))}
           </section>
+          </div>
 
+          <div className="main">
           <section className="card">
             <div className="tabs">
               <button className={side === "buy" ? "on" : ""} onClick={() => { setSide("buy"); setAmount(""); }}>Buy</button>
@@ -480,21 +503,37 @@ export default function Home() {
             {status === "failure" && statusDetail && <p className="error small">{statusDetail}</p>}
           </section>
 
-          {status && (
-            <section className="card">
-              <div className="row">
-                <strong>{current?.label ?? status}</strong>
-                {requestId && (
-                  <a href={`https://relay.link/transaction/${requestId}`} target="_blank" rel="noreferrer">
-                    View on Relay ↗
-                  </a>
-                )}
-              </div>
-              <p className="muted small">{current?.response ?? "Still working on it…"}</p>
-              {statusDetail && <p className="error small">{statusDetail}</p>}
+          {log.length > 0 && (
+            <section className="card log">
+              <button className="log-head row" onClick={() => setLogOpen((v) => !v)}>
+                <span>
+                  <strong>{log[log.length - 1].label}</strong>{" "}
+                  <span className="muted small">{log[log.length - 1].detail}</span>
+                </span>
+                <span className="muted">{logOpen ? "▴" : "▾"}</span>
+              </button>
+              {logOpen && (
+                <div className="log-entries">
+                  {log.map((e, i) => (
+                    <div key={i} className="log-entry small">
+                      <span className="muted">{e.time}</span>
+                      <span>
+                        <strong>{e.label}</strong>
+                        {e.detail && <span className={e.error ? "error" : "muted"}> · {e.detail}</span>}
+                      </span>
+                    </div>
+                  ))}
+                  {requestId && (
+                    <a href={`https://relay.link/transaction/${requestId}`} target="_blank" rel="noreferrer">
+                      View on Relay ↗
+                    </a>
+                  )}
+                </div>
+              )}
             </section>
           )}
-        </>
+          </div>
+        </div>
       )}
 
       {picking && (
